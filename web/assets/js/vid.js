@@ -1,22 +1,21 @@
-const MEETING_SERVICE = "https://<APIGatewayURL>/<route>";
-
 var isMeetingHost = false;
 var meetingId = "";
 var attendeeId = "";
 var userName = "";
-var clientId = "";
 var isScreenShared = false;
 const attendees = new Set();
 
 var urlParams = new URLSearchParams(window.location.search);
+console.log("🚀 ~ file: vid.js:9 ~ urlParams:", urlParams)
+console.log("🚀 ~ file: vid.js:9 ~ window.location.search:", window.location.search)
 
 // meetingId will be available if a user tries to join a meeting via a meeting URL
 meetingId = urlParams.get("meetingId");
+console.log("🚀 ~ file: vid.js:12 ~ meetingId:", meetingId)
 
-// Generate a unique client Id for the user
-clientId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-
-let requestPath = MEETING_SERVICE + `?clientId=${clientId}`;
+const clientId = urlParams.get("clientId")
+console.log("🚀 ~ file: vid.js:17 ~ clientId:", clientId)
+let requestPath = `http://localhost:3000/api/user/${clientId}/meetings`;
 
 // Setup logger
 const logger = new window.ChimeSDK.ConsoleLogger(
@@ -42,7 +41,7 @@ if (isMeetingHost) {
 } else {
 	startButton.innerText = "Join Meeting";
 	exitButton.style.display = "inline-block";
-	requestPath += `&meetingId=${meetingId}`;
+	requestPath += `?meetingId=${meetingId}`;
 }
 
 startButton.style.display = "inline-block";
@@ -68,35 +67,37 @@ async function doMeeting() {
 	}
 	try {
 		//Send request to service(API Gateway > Lambda function) to start/join meeting.
-		var response = await fetch(requestPath, {
+		console.log("🚀 ~ file: vid.js:72 ~ doMeeting ~ requestPath:", requestPath)
+		let reqUrl = requestPath
+		// if (meetingId) {
+		// 	reqUrl.concat(`?meetingId=${meetingId}`)
+		// }
+		var response = await fetch(reqUrl, {
 			method: "POST",
-			headers: new Headers(),
-			body: JSON.stringify({ action: "DO_MEETING", MEETING_ID: `${meetingId}`, USERNAME: `${userName}` })
+			headers: new Headers({
+				authorization: "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjNhM2JkODk4ZGE1MGE4OWViOWUxY2YwYjdhN2VmZTM1OTNkNDEwNjgiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vdXBwdGlrLWRldiIsImF1ZCI6InVwcHRpay1kZXYiLCJhdXRoX3RpbWUiOjE3MDE3Nzk1MzAsInVzZXJfaWQiOiJXRlZIYmxDTTFHZ0NIZnlvWUVLZzB4MXJsMVcyIiwic3ViIjoiV0ZWSGJsQ00xR2dDSGZ5b1lFS2cweDFybDFXMiIsImlhdCI6MTcwMTk0NjUzMywiZXhwIjoxNzAxOTUwMTMzLCJwaG9uZV9udW1iZXIiOiIrOTIzMDc4NTE4ODI4IiwiZmlyZWJhc2UiOnsiaWRlbnRpdGllcyI6eyJwaG9uZSI6WyIrOTIzMDc4NTE4ODI4Il19LCJzaWduX2luX3Byb3ZpZGVyIjoicGhvbmUifX0.f-vAJ2W6sq3zEFcW_nVhcgI8U_YLadv2poj7jQ0_f41P_bkcTwx87sVOVdbalgOn6CXiuGsO4eYjC4zNxGm8__peVfKNITr6e08FYb-6NaxdUM_LPr4Fr9lh2Qziw9cZo1uzV3lQzz2QW4zM4y58oFGW0vjfla7dSHWszOYiobsuTKcamhbzHj-AjdO3SERLYH0iJh9vuQA0vnctNu2EgUJarjc9OyST5wSwFCCLaKWMVgrlWkGQKVyGDcST91XSa0-Z43kjrGcwH7VIz2l5sxT1RJ62gGR54qzuojUtJQh4q5F8SNYIX5RJKyQwI_zIbGvyyA4mpCZEydLE9T2SPg"
+			}),
+			body: JSON.stringify({})
 		});
 
 		const data = await response.json();
-		
-		if (! data.hasOwnProperty('Info')) {
-			alert("Oops! The meeting might have ended!");
-			console.log("Meeting was not Found");	
-			return;
-		}
 
-		meetingId = data.Info.Meeting.Meeting.MeetingId;
-		attendeeId = data.Info.Attendee.Attendee.AttendeeId;
+		console.log(data)
+
+		meetingId = data.meeting.MeetingId;
+		attendeeId = data.attendee.AttendeeId;
 
 		document.getElementById("meeting-Id").innerText = meetingId;
 		if (isMeetingHost) {
-			document.getElementById("meeting-link").innerText = window.location.href + "?meetingId=" + meetingId;
+			document.getElementById("meeting-link").innerText = window.location.href + "&meetingId=" + meetingId;
 		}
-		else
-		{
+		else {
 			document.getElementById("meeting-link").innerText = window.location.href;
 		}
 
 		const configuration = new ChimeSDK.MeetingSessionConfiguration(
-			data.Info.Meeting.Meeting,
-			data.Info.Attendee.Attendee
+			data.meeting,
+			data.attendee
 		);
 		window.meetingSession = new ChimeSDK.DefaultMeetingSession(
 			configuration,
@@ -130,14 +131,14 @@ async function doMeeting() {
 			eventDidReceive(name, attributes) {
 				switch (name) {
 					case 'meetingEnded':
-					  cleanup();
-					  console.log("NOTE: Meeting Ended", attributes);
-					  break;
+						cleanup();
+						console.log("NOTE: Meeting Ended", attributes);
+						break;
 					case 'meetingReconnected':
-					  console.log('NOTE: Meeting Reconnected...');
-					  break;
+						console.log('NOTE: Meeting Reconnected...');
+						break;
+				}
 			}
-		  }
 		}
 
 		// Add observers for the meeting session
@@ -178,7 +179,7 @@ function updateTiles(meetingSession) {
 
 			// Create 'p' element for user name to display above video tile.
 			tileUserName = document.createElement("p");
-			tileUserName.style.color="blueviolet";
+			tileUserName.style.color = "blueviolet";
 			boundExtUserId = tile.tileState.boundExternalUserId
 			tileUserName.textContent = boundExtUserId.substring(0, boundExtUserId.indexOf("#"));
 
@@ -222,8 +223,7 @@ function attendeeObserver(attendeeId, present, externalUserId, dropped, posInFra
 };
 
 // Refresh attendee list in UI view
-function refreshAttendeesDisplay()
-{
+function refreshAttendeesDisplay() {
 	//Create list of attendees from attendees set, and then display.
 	attendeeStr = "";
 	for (const item of attendees) {
@@ -240,7 +240,9 @@ async function stopMeeting() {
 	try {
 		var response = await fetch(requestPath, {
 			method: "POST",
-			headers: new Headers(),
+			headers: new Headers({
+				authorization: "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjNhM2JkODk4ZGE1MGE4OWViOWUxY2YwYjdhN2VmZTM1OTNkNDEwNjgiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vdXBwdGlrLWRldiIsImF1ZCI6InVwcHRpay1kZXYiLCJhdXRoX3RpbWUiOjE3MDE3Nzk1MzAsInVzZXJfaWQiOiJXRlZIYmxDTTFHZ0NIZnlvWUVLZzB4MXJsMVcyIiwic3ViIjoiV0ZWSGJsQ00xR2dDSGZ5b1lFS2cweDFybDFXMiIsImlhdCI6MTcwMTk0NjUzMywiZXhwIjoxNzAxOTUwMTMzLCJwaG9uZV9udW1iZXIiOiIrOTIzMDc4NTE4ODI4IiwiZmlyZWJhc2UiOnsiaWRlbnRpdGllcyI6eyJwaG9uZSI6WyIrOTIzMDc4NTE4ODI4Il19LCJzaWduX2luX3Byb3ZpZGVyIjoicGhvbmUifX0.f-vAJ2W6sq3zEFcW_nVhcgI8U_YLadv2poj7jQ0_f41P_bkcTwx87sVOVdbalgOn6CXiuGsO4eYjC4zNxGm8__peVfKNITr6e08FYb-6NaxdUM_LPr4Fr9lh2Qziw9cZo1uzV3lQzz2QW4zM4y58oFGW0vjfla7dSHWszOYiobsuTKcamhbzHj-AjdO3SERLYH0iJh9vuQA0vnctNu2EgUJarjc9OyST5wSwFCCLaKWMVgrlWkGQKVyGDcST91XSa0-Z43kjrGcwH7VIz2l5sxT1RJ62gGR54qzuojUtJQh4q5F8SNYIX5RJKyQwI_zIbGvyyA4mpCZEydLE9T2SPg"
+			}),
 			body: JSON.stringify({ action: "END_MEETING", MEETING_ID: `${meetingId}` })
 		});
 
@@ -261,7 +263,9 @@ async function exitMeeting() {
 	try {
 		var response = await fetch(requestPath, {
 			method: "POST",
-			headers: new Headers(),
+			headers: new Headers({
+				authorization: "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjNhM2JkODk4ZGE1MGE4OWViOWUxY2YwYjdhN2VmZTM1OTNkNDEwNjgiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vdXBwdGlrLWRldiIsImF1ZCI6InVwcHRpay1kZXYiLCJhdXRoX3RpbWUiOjE3MDE3Nzk1MzAsInVzZXJfaWQiOiJXRlZIYmxDTTFHZ0NIZnlvWUVLZzB4MXJsMVcyIiwic3ViIjoiV0ZWSGJsQ00xR2dDSGZ5b1lFS2cweDFybDFXMiIsImlhdCI6MTcwMTk0NjUzMywiZXhwIjoxNzAxOTUwMTMzLCJwaG9uZV9udW1iZXIiOiIrOTIzMDc4NTE4ODI4IiwiZmlyZWJhc2UiOnsiaWRlbnRpdGllcyI6eyJwaG9uZSI6WyIrOTIzMDc4NTE4ODI4Il19LCJzaWduX2luX3Byb3ZpZGVyIjoicGhvbmUifX0.f-vAJ2W6sq3zEFcW_nVhcgI8U_YLadv2poj7jQ0_f41P_bkcTwx87sVOVdbalgOn6CXiuGsO4eYjC4zNxGm8__peVfKNITr6e08FYb-6NaxdUM_LPr4Fr9lh2Qziw9cZo1uzV3lQzz2QW4zM4y58oFGW0vjfla7dSHWszOYiobsuTKcamhbzHj-AjdO3SERLYH0iJh9vuQA0vnctNu2EgUJarjc9OyST5wSwFCCLaKWMVgrlWkGQKVyGDcST91XSa0-Z43kjrGcwH7VIz2l5sxT1RJ62gGR54qzuojUtJQh4q5F8SNYIX5RJKyQwI_zIbGvyyA4mpCZEydLE9T2SPg"
+			}),
 			body: JSON.stringify({ action: "DELETE_ATTENDEE", MEETING_ID: `${meetingId}`, ATTENDEE_ID: `${attendeeId}` })
 		});
 
@@ -277,13 +281,11 @@ async function exitMeeting() {
 }
 
 // Reset 
-function cleanup()
-{
+function cleanup() {
 	meetingSession.deviceController.destroy();
 	window.meetingSession = null;
 	//if meeting host - don't preserve the meeting id.
-	if (isMeetingHost)
-	{
+	if (isMeetingHost) {
 		meetingId = null;
 	}
 	document.getElementById("video-list").replaceChildren();
